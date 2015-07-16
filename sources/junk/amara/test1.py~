@@ -1,9 +1,0 @@
-import amara
-from amara import tree
-
-MONTY_XML = """<monty>
-<python span = "eggs">What do you mean jqsdlmk</python>
-<python ministry="abuse"> But I was looking for argument</python>
-</monty>"""
-
-doc = amara.parse(MONTY_XML)

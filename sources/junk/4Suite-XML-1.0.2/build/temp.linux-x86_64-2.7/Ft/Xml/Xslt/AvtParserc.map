@@ -1,1 +1,0 @@
-{ global: initAvtParserc; local: *; };
