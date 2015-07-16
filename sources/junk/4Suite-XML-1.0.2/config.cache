@@ -1,0 +1,16 @@
+[linux-x86_64-2.7]
+prefix = 
+exec_prefix = 
+compiler = 
+debug = False
+docdir = /usr/local/share/doc/$name
+datadir = /usr/local/share/$name
+includedir = /usr/local/include/$name
+pythonlibdir = /usr/local/lib/python2.7/dist-packages
+libdir = /usr/local/lib/$name
+localstatedir = /var/local/lib/$name
+sysconfdir = /usr/local/etc/$name
+localedir = /usr/local/share/locale
+bindir = /usr/local/bin
+mandir = /usr/local/share/man
+

@@ -1,0 +1,4 @@
+from amarra.writers import lookup
+
+HTML_W = lookup("html")
+xml_write(writer=HTML_W, stream=my_file, encoding='iso-8859-1)
