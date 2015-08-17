@@ -1,18 +1,5 @@
 #! /usr/bin/env python
 
-
-
-#import os
-#import sys
-#import wx
-#import wx.media
-#import wx.lib.buttons as buttons
-#import subprocess
-#import matplotlib.pyplot as plt
-#import numpy as np
-#import wave
-import wx.stc
-
 from player_skeleton2_1 import *
 dirName = os.path.dirname(os.path.abspath(__file__))
 bitmapDir = os.path.join(dirName, 'bitmaps')
@@ -24,17 +11,6 @@ from text_editor_2 import *
 
 sys.path.append(os.path.abspath(__file__))
 
-
-
-########################################################################
-class RandomPanel(wx.Panel):
-    """"""
-
-    #----------------------------------------------------------------------
-    def __init__(self, parent, color):
-        """Constructor"""
-        wx.Panel.__init__(self, parent)
-        self.SetBackgroundColour(color)
 
 ######################################################################"
 class MainPanel(wx.Panel):
@@ -56,7 +32,7 @@ class MainPanel(wx.Panel):
 
 
         topSplitter.SplitHorizontally(self.panelOne, self.panelTwo)
-        topSplitter.SetSashGravity(0.7)
+        topSplitter.SetSashGravity(0.58)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(topSplitter, 1, wx.EXPAND)
@@ -67,15 +43,19 @@ class MainPanel(wx.Panel):
     def createMenu(self):
         menubar = wx.MenuBar()
 
-        audiomenu = wx.Menu()
-        open_audio_menu_item = audiomenu.Append(wx.NewId(), "&Open", "Open an Audio file")
-        menubar.Append(audiomenu, '&Audio')
+        openmenu = wx.Menu()
+        open_audio_menu_item = openmenu.Append(wx.NewId(), "&Open an Audio File", "Open an Audio file")
         self.frame.Bind(wx.EVT_MENU, self.panelTwo.onBrowse, open_audio_menu_item)
+        open_text_menu_item = openmenu.Append(wx.NewId(), "&Open an XML file", "Open an XML file")
+        menubar.Append(openmenu, '&Open')
+        self.frame.Bind(wx.EVT_MENU, self.panelOne.OnBrowse, open_text_menu_item)
 
-        textmenu = wx.Menu()
-        open_text_menu_item = textmenu.Append(wx.NewId(), "&Open", "Open an XML file")
-        menubar.Append(textmenu, '&Text')
-        self.frame.Bind(wx.EVT_MENU, self.panelOne.OnOpen, open_text_menu_item)
+
+        savemenu = wx.Menu()
+        save_text_menu_item = savemenu.Append(wx.NewId(), "&Save the XML file", "Saveit")
+        self.frame.Bind(wx.EVT_MENU, self.panelOne.OnSave, save_text_menu_item)
+        menubar.Append(savemenu, "&Save")
+
 
         self.frame.SetMenuBar(menubar)
 

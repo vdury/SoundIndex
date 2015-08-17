@@ -1,10 +1,3 @@
-#----------------------------------------------------------------------
-# player_skeleton2.py
-#
-# Created: 04/15/2010
-#
-# Author: Mike Driscoll - mike@pythonlibrary.org
-#----------------------------------------------------------------------
 import matplotlib
 matplotlib.use('WXAgg')
     
@@ -23,6 +16,7 @@ import scipy.io.wavfile as wf
 import math
 from wx.lib.pubsub import pub
 import wx.lib.platebtn as platebtn
+import time
 
 sys.path.append("./")
 from wavio import *
@@ -52,7 +46,13 @@ class MediaPanel(wx.Panel):
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.onTimer, self.timer)
         self.timer.Start(1)
-        
+
+        pub.subscribe(self.myListener, "panelListener2")
+
+        #Variable Initialization
+        self.endmark = -1
+        self.x1 = 0
+        self.x0 = 0
 
     #----------------------------------------------------------------------
     def layoutControls(self):
@@ -68,14 +68,10 @@ class MediaPanel(wx.Panel):
 
         width, height = wx.DisplaySize()
         self.imageMaxWidth = width
-        self.imageMaxHeight= 100
+        self.imageMaxHeight= 200
 
 
-
-        #draw the cst image
-        #img = wx.Image('cst.png', wx.BITMAP_TYPE_ANY)
-        #img.Rescale(self.imageMaxWidth, self.imageMaxHeight)
-        #img = img.ConvertToBitmap()
+        #drawing the cst image
 
         self.fig = plt.figure(figsize=((self.imageMaxWidth/10.0), (self.imageMaxHeight/100.0)),frameon=False)
         self.ax = self.fig.add_axes([0, 0, 1, 1])
@@ -134,34 +130,100 @@ class MediaPanel(wx.Panel):
         if self.pressed == 1 & self.edit == 1:
             self.pressed = 0
             x,y = self.ScreenToClient(wx.GetMousePosition())
-            dc = wx.ClientDC(self.imageCtrl)
-            dc.BeginDrawing()
-            dc.SetPen(wx.Pen(wx.BLUE, 3))
-            if x-self.x0 > 0:
-                dc.DrawRectangle(self.x0, 15, x-self.x0, self.imageMaxHeight - 30)
-                if self.play != -1:
-                    self.AudioStart = (((self.x0/1.0)/(self.imageMaxWidth/1.0)) * (self.scrollbar.GetThumbPosition() + self.zoom)) + self.scrollbar.GetThumbPosition()
-                    self.AudioEnd   = (((x/1.0)/(self.imageMaxWidth/1.0)) * (self.scrollbar.GetThumbPosition() + self.zoom)) + self.scrollbar.GetThumbPosition()
-            else:
-                dc.DrawRectangle(x, 15, self.x0-x, self.imageMaxHeight - 30)
-                if self.play != -1:
-                    self.AudioStart = (((x/1.0)/(self.imageMaxWidth/1.0)) * (self.scrollbar.GetThumbPosition() + self.zoom)) + self.scrollbar.GetThumbPosition()
-                    self.AudioEnd   = (((self.x0/1.0)/(self.imageMaxWidth/1.0)) * (self.scrollbar.GetThumbPosition() + self.zoom)) + self.scrollbar.GetThumbPosition()
-            dc.EndDrawing()
+            self.x1 = self.coordsToSeconds(x)
+            #self.drawMark(0)
+            if self.play != -1:
+                self.AudioStart = min(self.x0, self.x1)
+                self.AudioEnd   = max(self.x0, self.x1)
+
 
     #---------------------------------------------------------------------
     def OnMotion(self, event):
         if self.pressed == 1:
             self.Refresh()
             x,y = self.ScreenToClient(wx.GetMousePosition())
-            dc = wx.ClientDC(self.imageCtrl)
-            dc.BeginDrawing()
-            dc.SetPen(wx.Pen(wx.BLUE, 3))
-            if x-self.x0 > 0:
-                dc.DrawRectangle(self.x0, 15, x-self.x0, self.imageMaxHeight - 30)
+            self.x1 = self.coordsToSeconds(x)
+            #self.drawMark(0)
+
+    #-----------------------------------------------------------------------
+    def drawMark(self, reload):
+        """
+        is called constantly, reload is used to know if the scrollbar 
+        has to be updated, only in the case of prev and next buttons
+        """
+        dc = wx.ClientDC(self.imageCtrl)
+        dc.BeginDrawing()
+        dc.SetBrush(wx.Brush(wx.BLUE, wx.CROSSDIAG_HATCH))
+        a, x0 = self.secondsToCoords(self.x0)
+        b, x1 = self.secondsToCoords(self.x1)
+        
+        if (((a != 0) | (b != 0)) & reload == 1):
+
+            if self.zoom < (abs(self.x0 - self.x1) + 2):
+                self.zoom = abs(self.x0 - self.x1) + 2
+                self.scrollbar.SetScrollbar(0, self.zoom, self.num/self.fs, 2)
+            #self.zoom = max(self.zoom, abs(self.x0 - self.x1) + 2)
+            
+            moment = min(self.x0, self.x1) - 1
+
+            if (moment+self.zoom) > self.length:
+                moment = self.length-self.zoom
+
+            self.scrollbar.SetThumbPosition(moment)
+
+            a, x0 = self.secondsToCoords(self.x0)
+            b, x1 = self.secondsToCoords(self.x1)
+            self.OnScroll(0)
+
+        dc.DrawRectangle(min(x0, x1), 0, abs(x1 - x0), self.imageMaxHeight - 40)
+        self.sentence.SetLabel("Marker set from %02d:%02d:%02d to %02d:%02d:%02d" % self.markerLabel(self.x0, self.x1))
+        
+        self.AudioStart = self.x0
+        self.AudioEnd = self.x1
+
+        dc.EndDrawing()
+    
+    #------------------------------------------------------------------------
+    def markerLabel(self, x0, x1):
+        y0 = min(x0, x1)
+        y1 = max(x0, x1)
+        
+        y0min = 0
+        y1min = 0
+
+        if y0 > 60:
+            y0min = y0/60
+            y0    = y0 - math.floor(y0min)*60
+        y0dec = int((y0 - int(y0))*100)
+        y0 = int(y0)
+    
+        if y1 > 60:
+            y1min = y1/60
+            y1    = y1 - math.floor(y1min)*60
+        y1dec = int((y1 - int(y1))*100)
+        y1 = int(y1)
+
+        return y0min, y0, y0dec, y1min, y1, y1dec
+    #------------------------------------------------------------------------
+
+
+    def OnLeftDown(self, event):
+        """Left mouse button clicked"""
+        x,y = self.ScreenToClient(wx.GetMousePosition())
+        if self.edit ==  1:
+            if event.ShiftDown():
+                self.x1 = self.coordsToSeconds(x)
             else:
-                dc.DrawRectangle(x, 15, self.x0-x, self.imageMaxHeight - 30)
-            dc.EndDrawing()
+                self.x1 = self.coordsToSeconds(x)
+                self.x0 = self.x1
+            self.pressed = 1
+        elif self.play != -1:
+            self.Refresh()
+            self.onPause(0)
+            self.mediaPlayer.Seek(self.x0*1000.0)
+            self.drawCursor()
+            self.Refresh()
+
 
     #----------------------------------------------------------------------
     def buildAudioBar(self):
@@ -170,47 +232,130 @@ class MediaPanel(wx.Panel):
         """
         audioBarSizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.buildBtn({'bitmap':'player_prev.png', 'handler':self.onPrev,
-                       'name':'prev'},
-                      audioBarSizer)
+        w = 40
+        h = 40
+        self.bmpMask = wx.EmptyBitmap(w, h)
 
-        # create play/pause toggle button
-        img = wx.Bitmap(os.path.join(bitmapDir, "player_play.png"))
-        #self.playPauseBtn = wx.Button(self, id= wx.ID_FORWARD, label="", size = (50,50))
-        #u"\u25B6"
-        self.playPauseBtn = buttons.GenBitmapToggleButton(self, bitmap=img, name="play")
+        mdc = wx.MemoryDC()
+        mdc.SelectObject(self.bmpMask)        
+        mdc.SetBackground(wx.Brush("lightgray")) 
+        mdc.Clear()
+
+        mdc.SetBrush(wx.Brush(wx.BLACK, wx.SOLID))
+        mdc.DrawPolygon([(36,20), (4,4), (4,36)])
+        self.playPauseBtn = buttons.GenBitmapButton(self, bitmap=self.bmpMask, name="play")
         self.playPauseBtn.Enable(False)
-
-        img = wx.Bitmap(os.path.join(bitmapDir, "player_pause.png"))
-        self.playPauseBtn.SetBitmapSelected(img)
-        #self.playPauseBtn.SetInitialSize()
-
+        self.playPauseBtn.SetInitialSize()
         self.playPauseBtn.Bind(wx.EVT_BUTTON, self.onPlay)
-        audioBarSizer.Add(self.playPauseBtn, 0, wx.LEFT, 3)
+        audioBarSizer.Add(self.playPauseBtn, 0, wx.EXPAND, 3)
 
-        btnData = [{'bitmap':'player_stop.png',
-                    'handler':self.onStop, 'name':'stop'},
-                    {'bitmap':'player_next.png',
-                     'handler':self.onNext, 'name':'next'}]
-        for btn in btnData:
-            self.buildBtn(btn, audioBarSizer)
 
-        btn = wx.Button(self, id= wx.ID_ANY, label = "EDIT")
+        #Pause Btn
+        self.bmpMask = wx.EmptyBitmap(w, h)
+
+        mdc.SelectObject(self.bmpMask)        
+        mdc.SetBackground(wx.Brush("lightgray")) 
+        mdc.Clear()
+
+        mdc.SetBrush(wx.Brush(wx.BLACK, wx.SOLID))
+        mdc.DrawRectangle(10, 8, 8, 24)
+        mdc.DrawRectangle(22, 8, 8, 24)
+        self.pauseBtn = buttons.GenBitmapButton(self, bitmap=self.bmpMask, name="pause")
+        self.pauseBtn.Enable(False)
+        self.pauseBtn.SetInitialSize()
+        self.pauseBtn.Bind(wx.EVT_BUTTON, self.onPause)
+        audioBarSizer.Add(self.pauseBtn, 0, wx.EXPAND, 3)
+
+
+        #Stop Btn
+        self.bmpMask = wx.EmptyBitmap(w, h)
+
+        mdc.SelectObject(self.bmpMask)        
+        mdc.SetBackground(wx.Brush("lightgray")) 
+        mdc.Clear()
+
+        mdc.SetBrush(wx.Brush(wx.BLACK, wx.SOLID))
+        mdc.DrawRectangle(8, 8, 24, 24)
+        btn = buttons.GenBitmapButton(self, bitmap=self.bmpMask, name="stop")
+        btn.Enable(True)
+        btn.SetInitialSize()
+        btn.Bind(wx.EVT_BUTTON, self.onStop)
+        audioBarSizer.Add(btn, 0, wx.EXPAND, 3)
+
+        #Zoom In Btn
+
+        btnData = [{'bitmap':'zoom_in.png',
+                    'handler':self.zoomIn, 'name':'zoomin'},
+                    {'bitmap':'zoom_out.png',
+                     'handler':self.zoomOut, 'name':'zoomout'}]
+        #for btn in btnData:
+        #    self.buildBtn(btn, audioBarSizer)
+
+        #Set Zoom Btn
+        btn = buttons.GenButton(self, label="Set Zoom", name="zoom")
+        btn.Bind(wx.EVT_BUTTON, self.onZoom)
+        audioBarSizer.Add(btn, 0, wx.EXPAND, 3)
+
+        #Prev Btn
+        self.bmpMask = wx.EmptyBitmap(23, h)
+
+        mdc.SelectObject(self.bmpMask)        
+        mdc.SetBackground(wx.Brush("lightgray")) 
+        mdc.Clear()
+
+        mdc.SetBrush(wx.Brush(wx.BLACK, wx.SOLID))
+        mdc.DrawRectangle(5, 7, 2, 26)
+        mdc.DrawPolygon([(5,20), (18,7), (18,33)])
+        btn = buttons.GenBitmapButton(self, bitmap=self.bmpMask, name="prev")
+        btn.Enable(True)
+        btn.SetInitialSize()
+        btn.Bind(wx.EVT_BUTTON, self.onPrev)
+        audioBarSizer.Add(btn, 0, wx.EXPAND, 3)
+
+        #Next Btn
+        self.bmpMask = wx.EmptyBitmap(23, h)
+
+        mdc.SelectObject(self.bmpMask)        
+        mdc.SetBackground(wx.Brush("lightgray")) 
+        mdc.Clear()
+
+        mdc.SetBrush(wx.Brush(wx.BLACK, wx.SOLID))
+        mdc.DrawRectangle(18, 7, 2, 26)
+        mdc.DrawPolygon([(18,20), (5,7), (5,33)])
+        btn = buttons.GenBitmapButton(self, bitmap=self.bmpMask, name="next")
+        btn.Enable(True)
+        btn.SetInitialSize()
+        btn.Bind(wx.EVT_BUTTON, self.onNext)
+        audioBarSizer.Add(btn, 0, wx.EXPAND, 3)
+
+        #Set Mark Btn
+        btn = buttons.GenToggleButton(self, label="Mark", name="mark")
         btn.Bind(wx.EVT_BUTTON, self.onEdit)
-        audioBarSizer.Add(btn, 0, wx.LEFT, 3)
+        audioBarSizer.Add(btn, 0, wx.EXPAND, 0)
+        
+        #Sync Xml Btn
+        btn = buttons.GenButton(self, label="Sync", name="sync")
+        btn.Bind(wx.EVT_BUTTON, self.onSync)
+        audioBarSizer.Add(btn, 0, wx.EXPAND, 0)
+        
+        #Mark&Next Btn
+        btn = buttons.GenButton(self, label="Sync & Next", name="syncnext")
+        btn.Bind(wx.EVT_BUTTON, self.onSyncNext)
+        audioBarSizer.Add(btn, 0, wx.EXPAND, 0)
 
-        btn2 = wx.Button(self, id= wx.ID_ANY, label = "SYNC")
-        btn2.Bind(wx.EVT_BUTTON, self.onSync)
-        audioBarSizer.Add(btn2, 0, wx.LEFT, 3)
+        #Spacer
+        audioBarSizer.AddSpacer(50)
 
-        #self.zoomslider = wx.Slider(self, size=(450,-1))
-        #self.zoomslider.Bind(wx.EVT_SLIDER, self.sliderUpdate)
-        btn3 = wx.Button(self, id= wx.ID_ANY, label = "ZOOM")
-        btn3.Bind(wx.EVT_BUTTON, self.onZoom)
-        audioBarSizer.Add(btn3, 0, wx.RIGHT, 3)
-        #testst = wx.StaticText(self, id= wx.ID_ANY, label = "XXXX")
-        #audioBarSizer.Add(testst, 0, wx.LEFT, 3)
+        #Showing Sentence nbr Text
+        self.sentence = wx.StaticText(self, wx.ID_ANY, size = (400,40), style = wx.ALIGN_CENTER)        
+        audioBarSizer.Add(self.sentence, 0, wx.RIGHT, 0)
 
+        #Showing audio time Text
+        self.audioRange = wx.StaticText(self, wx.ID_ANY, size = (300,40), style = wx.ALIGN_CENTER)        
+        audioBarSizer.Add(self.audioRange, 0, wx.RIGHT, 0)
+
+
+        mdc.EndDrawing()
         return audioBarSizer
 
     #----------------------------------------------------------------------
@@ -218,36 +363,23 @@ class MediaPanel(wx.Panel):
         """"""
         bmp = btnDict['bitmap']
         handler = btnDict['handler']
-
-        img = wx.Bitmap(os.path.join(bitmapDir, bmp))
+        #img = wx.Bitmap()
+        img = wx.Bitmap(self.resource_path(os.path.join(bitmapDir, bmp)))
         btn = buttons.GenBitmapButton(self, bitmap=img, name=btnDict['name'])
         btn.SetInitialSize()
         btn.Bind(wx.EVT_BUTTON, handler)
-        sizer.Add(btn, 0, wx.LEFT, 3)
-
-    #----------------------------------------------------------------------
-    def createMenu(self):
-        """
-        Creates a menu
-        """
-        menubar = wx.MenuBar()
-
-        fileMenu = wx.Menu()
-        open_file_menu_item = fileMenu.Append(wx.NewId(), "&Open", "Open a File")
-        menubar.Append(fileMenu, '&File')
-        self.frame.SetMenuBar(menubar)
-        self.frame.Bind(wx.EVT_MENU, self.onBrowse, open_file_menu_item)
+        sizer.Add(btn, 0, wx.EXPAND, 3)
 
     #----------------------------------------------------------------------
     def loadMusic(self, musicFile):
         """"""
         if not self.mediaPlayer.Load(musicFile):
-            wx.MessageBox("Unable to load %s: Unsupported format?" % pat,
+            wx.MessageBox("Unable to load %s: Unsupported format?" % musicFile,
                           "ERROR",
                           wx.ICON_ERROR | wx.OK)
         else:
             self.mediaPlayer.SetInitialSize()
-            self.GetSizer().Layout()
+            #self.GetSizer().Layout()
             self.playPauseBtn.Enable(True)
 
     #---------------------------------------------------------------------
@@ -269,14 +401,17 @@ class MediaPanel(wx.Panel):
             )
         if dlg.ShowModal() == wx.ID_OK:
             path = dlg.GetPath()
-            self.currentFolder = os.path.dirname(path)
-            self.loadMusic(path)
-            self.showInitialSoundwave(path)
-            self.play = 0
+            self.onOpen(path)
         dlg.Destroy()
-
-
-
+        
+    def onOpen(self, path):
+        self.currentFolder = os.path.dirname(path)
+        self.loadMusic(path)
+        self.showInitialSoundwave(path)
+        self.play = 0
+        self.endmark = self.mediaPlayer.Length()
+        fileName, fileExtension = os.path.splitext(path)
+        pub.sendMessage("panelListener", message = fileName)
 
     #----------------------------------------------------------------------
     def showInitialSoundwave(self, path):
@@ -299,24 +434,14 @@ class MediaPanel(wx.Panel):
         #si = np.arange(0, self.fs*10)
         self.num=len(self.signal)
         self.length = self.num/self.fs
-        #for i in range (0, min(self.num, self.fs*10)):
-        #    si[i] = self.signal[i]
-        #pub.sendMessage("WidgetPanel", message=length)
-        #Example(None)
         #scrollbar
         self.zoom =10
         self.scrollbar.SetScrollbar(0, self.zoom, self.num/self.fs, 2)
 
-        #signal = self.signal.take((0,10000))
-        #print len(self.signal)
-        #length = (len(signal)/10.0)/(fs/10.0)
-        #print "length of track: "+str((len(signal)/10.0)/(fs/10.0))
-        #print "data type: "+str(signal.dtype)
-        self.Time=np.linspace(0, self.num/self.fs, self.num)
         #print num/fs
         ratio = self.imageMaxHeight/self.imageMaxWidth
         #self.fig = plt.figure(figsize=((self.imageMaxWidth/100.0), 1),frameon=False)
-        self.imageCtrl.plot_data.set_xdata(self.Time[0:self.fs*self.zoom])
+        self.imageCtrl.plot_data.set_xdata(np.linspace(0,self.zoom, self.zoom*self.fs))
         self.imageCtrl.plot_data.set_ydata(self.signal[0:self.fs*self.zoom])
         #self.ax.set_xlim(0.0, 10.0)
         self.ax.set_xlim(0.0, self.zoom)
@@ -325,6 +450,8 @@ class MediaPanel(wx.Panel):
         self.imageCtrl.draw()
 
         plt.close()
+        self.audioRangeUpdate()
+        #self.audioRange.SetLabel("[]")
         self.Refresh()
         self.imageCtrl.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.imageCtrl.Bind(wx.EVT_LEFT_UP, self.OnRelease)
@@ -347,43 +474,55 @@ class MediaPanel(wx.Panel):
         """
         navigate through track
         """
-        print "wat"
         x,y = self.ScreenToClient(wx.GetMousePosition())
         print x
             
     #------------------------------------------------------------------
     def OnScroll(self, event):
-        #print self.scrollbar.GetThumbPosition()
         if self.play >= 0:
-            if event != 0:
-                self.onPause()
             moment = self.scrollbar.GetThumbPosition()
-            self.imageCtrl.plot_data.set_xdata(self.Time[moment*self.fs:(moment+self.zoom)*self.fs])
+            if event != 0:
+                self.onPause(0)
+                if event == 1:
+                    self.scrollbar.SetScrollbar(moment, self.zoom, self.num/self.fs, 2)
+                    if (moment+self.zoom) > self.length:
+                        moment = self.length-self.zoom
+                        self.scrollbar.SetThumbPosition(moment)
+
+            self.imageCtrl.plot_data.set_xdata(np.linspace(moment,self.zoom+moment, self.zoom*self.fs))
             self.imageCtrl.plot_data.set_ydata(self.signal[moment*self.fs:(moment+self.zoom)*self.fs])
 
             self.max_y = max(abs(min(self.signal[moment*self.fs:self.fs*(moment+self.zoom)])),
                              abs(max(self.signal[moment*self.fs:self.fs*(moment+self.zoom)])))
 
-            self.ax.set_xlim(moment, moment+self.zoom-1)
+
+            #Careful with that
+            self.ax.set_xlim(moment, moment+self.zoom)
             self.ax.set_ylim(-self.max_y+1, self.max_y-1)
             self.imageCtrl.draw()
+            self.audioRangeUpdate()
             self.Refresh()
-    #----------------------------------------------------------------------
-            #self.Refresh()
-    def onNext(self, event):
-        """
-        Not implemented!
-        """
-        pass
 
     #----------------------------------------------------------------------
-    def onPause(self):
+
+    def onNext(self, event):
+        if self.play>=0:
+            pub.sendMessage("panelListener", message="next")
+
+    #----------------------------------------------------------------------
+    def onPrev(self, event):
+        if self.play>=0:
+            pub.sendMessage("panelListener", message="prev")
+
+    #----------------------------------------------------------------------
+    def onPause(self, event):
         """
         Pauses the music
         """
         self.play = 0
         self.mediaPlayer.Pause()
-        self.playPauseBtn.SetToggle(False)
+        self.playPauseBtn.Enable(True)
+        self.pauseBtn.Enable(False)
 
     #--------------------------------------------------------------------
     def onEdit(self, event):
@@ -391,6 +530,10 @@ class MediaPanel(wx.Panel):
         Turns on/off Edit mode
         """
         self.edit = (self.edit + 1)%2
+        if self.edit == 0:
+            self.sentence.SetLabel("")
+            self.Refresh()
+            self.endmark = self.mediaPlayer.Length()
 
     #--------------------------------------------------------------------
     def onSync(self, event):
@@ -399,56 +542,73 @@ class MediaPanel(wx.Panel):
         else:
             pub.sendMessage("panelListener", message=str(self.AudioStart), arg2=str(self.AudioEnd))
 
+    #--------------------------------------------------------------------
+    def onSyncNext(self, event):
+        if self.edit != 0:
+            self.onSync(0)
+            #time.sleep(0.1)
+            self.onNext(0)
+
     #----------------------------------------------------------------------
     def onZoom(self, event):
         if self.play >= 0:
             if self.length > 5:
-                self.onPause()
+                self.onPause(0)
                 dlg = ZoomDialog(self, -1, 'Zoom', self.zoom, self.length)
                 dlg.ShowModal()
                 dlg.Destroy()
-                self.sliderUpdate()
+                self.OnScroll(1)
 
-    #----------------------------------------------------------------------
-    def sliderUpdate(self):
+    def zoomOut(self, event):
         if self.play >= 0:
-            moment = self.scrollbar.GetThumbPosition()
-            #self.zoom = self.zoomslider.GetValue()
-            self.scrollbar.SetScrollbar(0, self.zoom, self.num/self.fs, 2)
-            if (moment+self.zoom) > self.length:
-                moment = self.length-self.zoom
-                self.scrollbar.SetThumbPosition(moment)
-            self.imageCtrl.plot_data.set_xdata(self.Time[moment*self.fs:(moment+self.zoom)*self.fs])
-            self.imageCtrl.plot_data.set_ydata(self.signal[moment*self.fs:(moment+self.zoom)*self.fs])
+            self.zoom = self.zoom + 1
+            self.OnScroll(1)
 
-            self.max_y = max(abs(min(self.signal[moment*self.fs:self.fs*(moment+self.zoom)])),
-                             abs(max(self.signal[moment*self.fs:self.fs*(moment+self.zoom)])))
-
-            self.ax.set_xlim(moment, moment+self.zoom)
-            self.ax.set_ylim(-self.max_y+1, self.max_y-1)
-            self.imageCtrl.draw()
-            self.Refresh()
+    def zoomIn(self, event):
+        if (self.play >= 0) & (self.zoom >= 2):
+            self.zoom = self.zoom - 1
+            self.OnScroll(1)
 
     #----------------------------------------------------------------------
+    def audioRangeUpdate(self):
+        moment = self.scrollbar.GetThumbPosition()
+        end = moment + self.zoom
+        momentmin = 0
+        endmin = 0
+        if moment >= 60:
+            momentmin = moment/60
+            moment = moment - momentmin*60
+        if end >= 60:
+            endmin = int(end/60)
+            end = end - endmin*60
+        self.audioRange.SetLabel("Displaying [%02d:%02d - %02d:%02d]" %(momentmin, moment, endmin, end))
+
+    #----------------------------------------------------------------------
+
     def onPlay(self, event):
         """
         Plays the music
         """
         self.play = 1
         if not event.GetIsDown():
-            self.onPause()
+            self.onPause(0)
             return
 
         if not self.mediaPlayer.Play():
             wx.MessageBox("Unable to Play media : Unsupported format?",
                           "ERROR",
                           wx.ICON_ERROR | wx.OK)
+        elif self.edit == 1:
+            offset = min(self.x0, self.x1)
+            self.endmark = max(self.x0, self.x1)
+            self.mediaPlayer.Seek(offset*1000)
         else:
             self.mediaPlayer.SetInitialSize()
-            #self.GetSizer().Layout()
-            self.drawCursor()
-            #self.playbackSlider.SetRange(0, self.mediaPlayer.Length())
+        self.drawCursor()
         event.Skip()
+        self.playPauseBtn.Enable(False)
+        self.pauseBtn.Enable(True)
+
 
 
     def drawCursor(self):
@@ -462,21 +622,6 @@ class MediaPanel(wx.Panel):
             dc.EndDrawing()
         elif (mom > (self.scrollbar.GetThumbPosition() + self.zoom)):
             self.ScrollButton(0, 1, 1)
-            #self.scrollbar.SetThumbPosition(self.scrollbar.GetThumbPosition() + self.zoom)
-        #elif (mom == (self.scrollbar.GetThumbPosition() + self.zoom)):
-            #self.scrollbar.SetThumbPosition(self.scrollbar.GetThumbPosition() + self.zoom)
-    #---------------------------------------------------------------------
-    #def drawRectangle(self, x, y):
-    #    dc = wx.ClientDC(self.imageCtrl)
-    #    dc.SetPen(wx.Pen(wx.BLUE, 3))
-    #    dc.DrawRectangle(x, 15, 40, self.imageMaxHeight -15)
-
-
-    #----------------------------------------------------------------------
-    def onPrev(self, event):
-        """Same as onStop (for now)"""
-        self.onStop(0)
-
 
     #----------------------------------------------------------------------
     def onSeek(self, event):
@@ -487,6 +632,7 @@ class MediaPanel(wx.Panel):
         offset = self.playbackSlider.GetValue()
         self.mediaPlayer.Seek(offset)
         self.drawCursor()
+
     #----------------------------------------------------------------------
     def onSetVolume(self, event):
         """
@@ -507,18 +653,20 @@ class MediaPanel(wx.Panel):
             self.Refresh()
             self.play = 0
             self.mediaPlayer.Stop()
-            self.playPauseBtn.SetToggle(False)
+            self.playPauseBtn.Enable(True)
+            self.pauseBtn.Enable(False)
     #----------------------------------------------------------------------
 
     def onTimer(self, event):
         """
         Keeps the player slider updated
         """
-        #print self.scrollbar.GetThumbPosition()
         if self.play == -1:
             pass
         elif self.mediaPlayer.Tell() == self.mediaPlayer.Length():
-            self.onPrev(0)
+            self.onStop(0)
+        elif self.mediaPlayer.Tell() >= self.endmark*1000:
+            self.onPause(0)
         else:
             offset = self.mediaPlayer.Tell()
             self.drawCursor()
@@ -537,30 +685,45 @@ class MediaPanel(wx.Panel):
                 endmin = 0
 
             self.watch.SetLabel("%d:%02d/%d:%02d" % (momentmin, moment, endmin, end))
-            if self.play == 1:
-                self.Refresh()
+            
+        if self.edit == 1:
+            self.drawMark(0)
 
-
-    def OnLeftDown(self, event):
-        """Left mouse button clicked"""
-        x,y = self.ScreenToClient(wx.GetMousePosition())
-        if self.edit ==  1:
-            self.x0 = x
-            self.y0 = y
-            self.pressed = 1
-        elif self.play != -1:
+        if self.play == 1:
             self.Refresh()
-            self.onPause()
-            offset = (((x/1.0)/(self.imageMaxWidth/1.0)) * self.zoom) + self.scrollbar.GetThumbPosition()
-            self.mediaPlayer.Seek(offset*1000.0)
-            self.drawCursor()
-        #elif self.play == 0:
-            self.Refresh()
-
+        
     def onClose(self):
         self.onStop(0)
         self.mediaPlayer.Destroy()
         self.Destroy()
+
+    def myListener(self, message, arg2=None):
+        if self.play >= 0:
+            print "Received "+ message
+            if arg2:
+                print "other arg "+str(arg2)
+                self.Refresh()
+                self.x0 = float(message)
+                self.x1 = float(arg2)
+                self.drawMark(1)
+        elif os.path.exists(message+".wav"):
+            self.onOpen(message+".wav")
+        else:
+            print message+".wav"
+
+
+    def secondsToCoords(self, x):
+        a = self.scrollbar.GetThumbPosition()
+        b = a +self.zoom
+        if x < a:
+            return 1, 0
+        elif x > b:
+            return 1, self.imageMaxWidth
+        else:
+            return 0, (((x-a)/(b-a))*self.imageMaxWidth)
+
+    def coordsToSeconds(self, x):
+        return (((x*1.0/self.imageMaxWidth*1.0) * self.zoom) + self.scrollbar.GetThumbPosition())
 
 #----------------------------------------------------------------------------------------
 
@@ -583,7 +746,6 @@ class ZoomDialog(wx.Dialog):
         topsizer.AddSpacer(15)
         sizer.Add(topsizer, border=5)
         sizer.AddSpacer(20)
-        #topSizer.Add(wx.StaticLine(self.panel,), 0, wx.ALL|wx.EXPAND, 5)
         self.value = wx.StaticText(self, wx.ID_ANY, label = "Showing %02d seconds of the sound sample" % zoom, style = wx.ALIGN_CENTER)
         sizer.Add(self.value, 0, wx.ALIGN_CENTER_HORIZONTAL, 5)
         sizer.AddSpacer(30)
@@ -611,38 +773,3 @@ class ZoomDialog(wx.Dialog):
     def onCancel(self, event):
         self.Destroy()
 
-########################################################################
-#class MediaFrame(wx.Frame):
-
-    #----------------------------------------------------------------------
-    #def __init__(self):
-    #    wx.Frame.__init__(self, None, wx.ID_ANY, wx.EmptyString)
-    #    panel = MediaPanel(self)
-    #    self.Maximize(True)
-
-#----------------------------------------------------------------------
-# Run the program
-#if __name__ == "__main__":
-#    app = wx.App(False)
-#    frame = MediaFrame()
-#    frame.Show()
-#    app.MainLoop()
-#class MainFrame(wx.Frame):
-
-    #----------------------------------------------------------------------
-#    def __init__(self):
-#        wx.Frame.__init__(self, None, wx.ID_ANY, "SoundIndex_2.0")
-        #bSizer1 = wx.BoxSizer( wx.VERTICAL )
-#        self.player_panel = MediaPanel(self)
-        #self.text_panel = TextPanel(self)
-        #bSizer1.Add(self.text_panel)
-        #bSizer1.Add(self.player_panel)
-#        self.Maximize(True)
-
-#----------------------------------------------------------------------
-# Run the program
-#if __name__ == "__main__":
-#    app = wx.App(False)
-#    frame = MainFrame()
-#    frame.Show()
-#    app.MainLoop()
