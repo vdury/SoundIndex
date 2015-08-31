@@ -1,0 +1,48 @@
+Traceback (most recent call last):
+  File "SoundIndex_2.0.py", line 4, in <module>
+NameError: name '__file__' is not defined
+Traceback (most recent call last):
+  File "SoundIndex_2.0.py", line 92, in <module>
+  File "SoundIndex_2.0.py", line 85, in __init__
+  File "SoundIndex_2.0.py", line 27, in __init__
+  File "player_skeleton2_1.pyc", line 65, in __init__
+  File "player_skeleton2_1.pyc", line 152, in layoutControls
+  File "player_skeleton2_1.pyc", line 240, in buildAudioBar
+  File "player_skeleton2_1.pyc", line 327, in buildBtn
+  File "wx\lib\buttons.pyc", line 405, in __init__
+  File "wx\lib\buttons.pyc", line 442, in SetBitmapLabel
+  File "wx\_core.pyc", line 3750, in ImageFromBitmap
+wx._core.PyAssertionError: C++ assertion "hbmp" failed at ..\..\src\msw\dib.cpp(139) in wxDIB::Create(): wxDIB::Create(): invalid bitmap
+Traceback (most recent call last):
+  File "SoundIndex_2.0.py", line 76, in onClose
+AttributeError: 'MainPanel' object has no attribute 'panelTwo'
+Traceback (most recent call last):
+  File "SoundIndex_2.0.py", line 92, in <module>
+  File "SoundIndex_2.0.py", line 85, in __init__
+  File "SoundIndex_2.0.py", line 27, in __init__
+  File "player_skeleton2_1.pyc", line 64, in __init__
+  File "player_skeleton2_1.pyc", line 152, in layoutControls
+  File "player_skeleton2_1.pyc", line 240, in buildAudioBar
+  File "player_skeleton2_1.pyc", line 327, in buildBtn
+  File "wx\lib\buttons.pyc", line 405, in __init__
+  File "wx\lib\buttons.pyc", line 442, in SetBitmapLabel
+  File "wx\_core.pyc", line 3750, in ImageFromBitmap
+wx._core.PyAssertionError: C++ assertion "hbmp" failed at ..\..\src\msw\dib.cpp(139) in wxDIB::Create(): wxDIB::Create(): invalid bitmap
+Traceback (most recent call last):
+  File "SoundIndex_2.0.py", line 76, in onClose
+AttributeError: 'MainPanel' object has no attribute 'panelTwo'
+Traceback (most recent call last):
+  File "SoundIndex_2.0.py", line 92, in <module>
+  File "SoundIndex_2.0.py", line 85, in __init__
+  File "SoundIndex_2.0.py", line 27, in __init__
+  File "player_skeleton2_1.pyc", line 64, in __init__
+  File "player_skeleton2_1.pyc", line 152, in layoutControls
+  File "player_skeleton2_1.pyc", line 240, in buildAudioBar
+  File "player_skeleton2_1.pyc", line 327, in buildBtn
+  File "wx\lib\buttons.pyc", line 405, in __init__
+  File "wx\lib\buttons.pyc", line 442, in SetBitmapLabel
+  File "wx\_core.pyc", line 3750, in ImageFromBitmap
+wx._core.PyAssertionError: C++ assertion "hbmp" failed at ..\..\src\msw\dib.cpp(139) in wxDIB::Create(): wxDIB::Create(): invalid bitmap
+Traceback (most recent call last):
+  File "SoundIndex_2.0.py", line 76, in onClose
+AttributeError: 'MainPanel' object has no attribute 'panelTwo'

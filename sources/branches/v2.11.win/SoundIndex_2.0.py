@@ -26,15 +26,11 @@ class MainPanel(wx.Panel):
 
         self.panelOne = TextPanel(topSplitter)
         self.panelTwo = MediaPanel(topSplitter)
-        #self.panelThree = RandomPanel(vSplitter, "red")
-
-        #vSplitter.SplitVertically(self.panelOne, self.panelThree)
-        #vSplitter.SetSashGravity(0.75)
 
         width, height = wx.DisplaySize()
 
         topSplitter.SplitHorizontally(self.panelOne, self.panelTwo)
-        topSplitter.SetSashGravity(0.67)
+        topSplitter.SetSashGravity(1.0-(325.0/height))
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(topSplitter, 1, wx.EXPAND)
